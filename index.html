@@ -7,17 +7,19 @@
 <style>
   /* Keep the kiosk self-contained; surf will use local sans-serif fonts. */
   *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; height:100%; overflow:hidden; background:#080808; cursor:none; }
+  html, body { width:100%; height:100%; overflow:hidden; background:radial-gradient(ellipse at center, #0d0d0d 0%, #060606 65%, #030303 100%); cursor:none; }
   /* The stage is authored at a fixed 1920x1080 so every animation coordinate
      stays exact; #screen scales that canvas to fit whatever viewport it loads
      in (letterboxed). The transform also makes the fixed children below anchor
-     to this box instead of the raw viewport. */
+     to this box instead of the raw viewport. Canvas backing-store resolution is
+     scaled independently (see setupHiDPICanvas) so it stays crisp up to native
+     4K, regardless of this CSS scale factor. */
   #screen { position:fixed; top:50%; left:50%; width:1920px; height:1080px; transform-origin:center center; transform:translate(-50%,-50%); }
   #particles-canvas { position:fixed; top:0; left:0; width:1920px; height:1080px; pointer-events:none; z-index:0; }
-  #stage { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); display:flex; align-items:center; justify-content:center; gap:100px; z-index:10; }
+  #stage { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); display:flex; align-items:center; justify-content:center; gap:100px; z-index:10; opacity:1; transition:opacity 0.45s ease; }
   .logo-block { width:240px; display:flex; flex-direction:column; align-items:center; gap:22px; }
   #icon-wrap { width:158px; height:158px; position:relative; display:flex; align-items:center; justify-content:center; }
-  #logo-svg { position:absolute; top:0; left:0; width:158px; height:158px; filter:none; }
+  #logo-svg { position:absolute; top:0; left:0; width:158px; height:158px; filter:drop-shadow(0 0 22px rgba(255,198,0,0.22)); }
   #icon-canvas { position:absolute; top:0; left:0; width:158px; height:158px; opacity:0; }
   #brand-strip { width:228px; height:58px; position:relative; display:flex; align-items:center; justify-content:center; }
   #brand-wordmark { position:absolute; width:228px; height:58px; opacity:0.96; transition:opacity 0.35s; }
@@ -27,6 +29,21 @@
   .time-digital { font-family:'Nunito',sans-serif; font-weight:600; font-size:44px; letter-spacing:0.04em; color:rgba(255,255,255,0.88); line-height:1; white-space:nowrap; }
   .time-digital .ampm { font-size:17px; font-weight:300; color:rgba(255,255,255,0.38); margin-left:6px; vertical-align:middle; }
   .date-line { font-family:'DM Sans',sans-serif; font-weight:300; font-size:15px; letter-spacing:0.36em; text-transform:uppercase; color:rgba(255,255,255,0.32); white-space:nowrap; }
+
+  /* -- CAST-TO-SCREEN CARDS -- */
+  #cast-overlay { position:fixed; top:0; left:0; width:1920px; height:1080px; display:flex; align-items:center; justify-content:center; z-index:15; opacity:0; pointer-events:none; transition:opacity 0.45s ease; }
+  #cast-overlay.visible { opacity:1; }
+  .cast-card { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:34px; opacity:0; transition:opacity 0.6s ease; text-align:center; padding:0 200px; }
+  .cast-card.active { opacity:1; }
+  .cast-eyebrow { font-family:'DM Sans',sans-serif; font-weight:400; font-size:26px; letter-spacing:0.42em; text-transform:uppercase; color:rgba(255,198,0,0.75); }
+  .cast-title { font-family:'Nunito',sans-serif; font-weight:700; font-size:128px; color:rgba(255,255,255,0.95); line-height:1.05; }
+  .cast-keys { display:flex; align-items:center; gap:26px; margin:6px 0; }
+  .cast-keys .key { font-family:'Nunito',sans-serif; font-weight:700; font-size:66px; color:#FFC600; background:rgba(255,198,0,0.12); border:3px solid rgba(255,198,0,0.55); border-radius:20px; padding:16px 38px; box-shadow:0 0 40px rgba(255,198,0,0.18); }
+  .cast-keys .key-plus { font-size:56px; color:rgba(255,255,255,0.45); font-weight:300; }
+  .cast-body { font-family:'DM Sans',sans-serif; font-weight:400; font-size:52px; color:rgba(255,255,255,0.88); line-height:1.4; max-width:1400px; }
+  .cast-body strong { color:#FFC600; font-weight:600; }
+  .cast-note { font-family:'DM Sans',sans-serif; font-weight:300; font-size:28px; letter-spacing:0.02em; color:rgba(255,255,255,0.4); max-width:1200px; }
+  .cast-note strong { color:rgba(255,255,255,0.65); font-weight:500; }
 </style>
 </head>
 <body>
@@ -74,16 +91,30 @@
     <div class="date-line" id="date-str">Monday &middot; January 1</div>
   </div>
 </div>
+<div id="cast-overlay">
+  <div class="cast-card" data-card="win">
+    <div class="cast-eyebrow">Cast to this screen</div>
+    <div class="cast-title">Windows</div>
+    <div class="cast-keys"><span class="key">Win</span><span class="key-plus">+</span><span class="key">K</span></div>
+    <div class="cast-body">Select <strong>Idea Lab</strong> from the list</div>
+    <div class="cast-note">Need room audio or mic? Install <strong>ScreenBeam Conference</strong> first.</div>
+  </div>
+  <div class="cast-card" data-card="apple">
+    <div class="cast-eyebrow">Cast to this screen</div>
+    <div class="cast-title">Mac &middot; iPhone &middot; iPad</div>
+    <div class="cast-body">Control Center &rarr; Screen Mirroring &rarr; <strong>Idea Lab</strong></div>
+    <div class="cast-note">AirPlay &middot; same Wi-Fi network as this room</div>
+  </div>
+  <div class="cast-card" data-card="android">
+    <div class="cast-eyebrow">Cast to this screen</div>
+    <div class="cast-title">Android</div>
+    <div class="cast-body">Quick Settings &rarr; Cast &rarr; <strong>Idea Lab</strong></div>
+    <div class="cast-note">Miracast &middot; look for &ldquo;Idea Lab&rdquo; in your device list</div>
+  </div>
+</div>
 </div>
 
 <script>
-// Scale the fixed 1920x1080 stage to fit the current viewport (letterboxed).
-function fitScreen(){
-  const s=Math.min(innerWidth/1920,innerHeight/1080);
-  document.getElementById('screen').style.transform=`translate(-50%,-50%) scale(${s})`;
-}
-fitScreen();addEventListener('resize',fitScreen);
-
 const ic=document.getElementById('icon-canvas'),ictx=ic.getContext('2d');
 const logoSVG=document.getElementById('logo-svg'),lbl=document.getElementById('tagline'),brandWordmark=document.getElementById('brand-wordmark');
 const CW=220,CH=220,CM=110,Y='#FFC600';
@@ -94,9 +125,9 @@ function eout(t){return 1-(1-t)*(1-t);}
 function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
 
 const params=new URLSearchParams(location.search);
-const TARGET_FPS=clamp(Number(params.get('fps'))||40,15,60);
+const TARGET_FPS=clamp(Number(params.get('fps'))||60,15,60);
 const FRAME_MS=1000/TARGET_FPS;
-const PARTICLE_COUNT=clamp(Number(params.get('particles'))||72,0,160);
+const PARTICLE_COUNT=clamp(Number(params.get('particles'))||150,0,260);
 
 if(!CanvasRenderingContext2D.prototype.roundRect){
   CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){
@@ -114,8 +145,8 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
   };
 }
 
-function showBrandWordmark(a){brandWordmark.style.opacity=String(a);lbl.textContent=' ';lbl.style.color='rgba(255,255,255,0)';}
-function setLabel(txt,a){lbl.textContent=txt||' ';lbl.style.color=txt?`rgba(255,198,0,${a})`:'rgba(255,255,255,0)';}
+function showBrandWordmark(a){brandWordmark.style.opacity=String(a);lbl.textContent=' ';lbl.style.color='rgba(255,255,255,0)';}
+function setLabel(txt,a){lbl.textContent=txt||' ';lbl.style.color=txt?`rgba(255,198,0,${a})`:'rgba(255,255,255,0)';}
 
 function prep(lw,blur){
   ictx.strokeStyle=Y;ictx.fillStyle=Y;ictx.lineWidth=lw||7;
@@ -303,7 +334,14 @@ const scenes=[
   }
 ];
 
-let phase='idle',phaseTimer=0,sceneIdx=0,sceneTimer=0,lastTs=null;
+// -- CAST-TO-SCREEN CHAPTER --
+const stageEl=document.getElementById('stage');
+const castOverlay=document.getElementById('cast-overlay');
+const castCardEls=Array.from(document.querySelectorAll('.cast-card'));
+const CAST_DUR=8.5;
+function showCastCard(i){castCardEls.forEach((el,idx)=>el.classList.toggle('active',idx===i));}
+
+let phase='idle',phaseTimer=0,sceneIdx=0,sceneTimer=0,lastTs=null,castIdx=0,castTimer=0;
 
 function updateAnim(ts){
   if(!lastTs)lastTs=ts;
@@ -321,6 +359,28 @@ function updateAnim(ts){
     ictx.clearRect(0,0,CW,CH);
     if(t>=1){phase='scene';phaseTimer=0;}return;
   }
+  if(phase==='stagehide'){
+    stageEl.style.opacity='0';
+    if(phaseTimer>=0.5){phase='cast';phaseTimer=0;castIdx=0;castTimer=0;castOverlay.classList.add('visible');showCastCard(0);}
+    return;
+  }
+  if(phase==='cast'){
+    castTimer+=dt;
+    if(castTimer>=CAST_DUR){
+      castIdx++;castTimer=0;
+      if(castIdx>=castCardEls.length){
+        castOverlay.classList.remove('visible');showCastCard(-1);
+        phase='stageshow';phaseTimer=0;
+      } else {
+        showCastCard(castIdx);
+      }
+    }
+    return;
+  }
+  if(phase==='stageshow'){
+    if(phaseTimer>=0.5){stageEl.style.opacity='1';phase='fadein';phaseTimer=0;}
+    return;
+  }
   if(phase==='fadein'){
     const t=Math.min(phaseTimer/0.5,1);
     logoSVG.style.opacity=String(t);ic.style.opacity=String(1-t);
@@ -335,14 +395,13 @@ function updateAnim(ts){
   scene.render(sceneTimer);
   if(sceneTimer>=scene.dur){
     sceneIdx++;sceneTimer=0;setLabel('',0);
-    if(sceneIdx>=scenes.length){phase='fadein';phaseTimer=0;ictx.clearRect(0,0,CW,CH);}
+    if(sceneIdx>=scenes.length){phase='stagehide';phaseTimer=0;ictx.clearRect(0,0,CW,CH);}
   }
 }
 
 // -- CLOCK --
 const CLK=document.getElementById('clock-canvas'),kctx=CLK.getContext('2d'),CX=110,CY=110,R=100;
 const clockFace=document.createElement('canvas'),faceCtx=clockFace.getContext('2d');
-clockFace.width=220;clockFace.height=220;
 function drawClockFace(){
   faceCtx.clearRect(0,0,220,220);
   for(let i=0;i<60;i++){
@@ -353,11 +412,24 @@ function drawClockFace(){
     faceCtx.lineWidth=q?2.6:1.2;faceCtx.lineCap='round';faceCtx.stroke();
   }
 }
-drawClockFace();
+
+// -- CENTRAL TIME (America/Chicago) --
+// Kiosk may be viewed via cast from devices set to other timezones; always show Central.
+let centralOffsetMs=0;
+function refreshCentralOffset(){
+  const now=new Date();
+  const central=new Date(now.toLocaleString('en-US',{timeZone:'America/Chicago'}));
+  centralOffsetMs=central.getTime()-now.getTime();
+}
+refreshCentralOffset();
+setInterval(refreshCentralOffset,30000);
+function getCentralNow(){return new Date(Date.now()+centralOffsetMs);}
+
 function drawClock(){
-  const now=new Date(),sec=now.getSeconds()+now.getMilliseconds()/1000,min=now.getMinutes()+sec/60,hr=(now.getHours()%12)+min/60;
+  const cn=getCentralNow();
+  const sec=cn.getSeconds()+cn.getMilliseconds()/1000,min=cn.getMinutes()+sec/60,hr=(cn.getHours()%12)+min/60;
   kctx.clearRect(0,0,220,220);
-  kctx.drawImage(clockFace,0,0);
+  kctx.drawImage(clockFace,0,0,220,220);
   function hand(angle,len,w,col){
     kctx.beginPath();kctx.moveTo(CX-Math.cos(angle)*14,CY-Math.sin(angle)*14);
     kctx.lineTo(CX+Math.cos(angle)*len,CY+Math.sin(angle)*len);
@@ -377,10 +449,10 @@ function drawClock(){
 const DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 function updateDigital(){
-  const now=new Date();let h=now.getHours();const m=now.getMinutes();
+  const cn=getCentralNow();let h=cn.getHours();const m=cn.getMinutes();
   const ap=h>=12?'PM':'AM';h=h%12||12;
   document.getElementById('digital-time').innerHTML=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}<span class="ampm">${ap}</span>`;
-  document.getElementById('date-str').textContent=`${DAYS[now.getDay()]} · ${MONTHS[now.getMonth()]} ${now.getDate()}`;
+  document.getElementById('date-str').textContent=`${DAYS[cn.getDay()]} · ${MONTHS[cn.getMonth()]} ${cn.getDate()}`;
 }
 
 // -- PARTICLES --
@@ -394,10 +466,43 @@ function updateParticles(dt){
     if(p.life==='in'){p.opacity+=p.fadeIn*dt*60*0.016;if(p.opacity>=p.maxOp){p.opacity=p.maxOp;p.life='full';}}
     else if(p.life==='full'){p.fullCount+=dt*60*0.016;if(p.fullCount>=p.fullTime)p.life='out';}
     else{p.opacity-=p.fadeOut*dt*60*0.016;if(p.opacity<=0||p.y<-10){particles[i]=spawnP(false);continue;}}
+    pctx.shadowColor=`rgba(255,198,0,${(p.opacity*0.8).toFixed(3)})`;
+    pctx.shadowBlur=p.size*2.4;
     pctx.beginPath();pctx.arc(p.x,p.y,p.size,0,Math.PI*2);
     pctx.fillStyle=`rgba(255,198,0,${p.opacity.toFixed(3)})`;pctx.fill();
   }
+  pctx.shadowBlur=0;
 }
+
+// -- HiDPI / 4K+ SUPERSAMPLING --
+// Canvases render at devicePixelRatio x the fit-to-viewport scale (capped at 4x)
+// so playback stays crisp when scaled up to large displays (e.g. a 98" 4K TV),
+// instead of stretching a fixed low-res raster.
+let fitScale=1;
+const dpr=Math.max(1,window.devicePixelRatio||1);
+function backingScale(){return clamp(fitScale*dpr,1,4);}
+function setupHiDPICanvas(canvas,ctx,logicalW,logicalH){
+  const bs=backingScale();
+  const w=Math.max(1,Math.round(logicalW*bs)),h=Math.max(1,Math.round(logicalH*bs));
+  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+  ctx.setTransform(bs,0,0,bs,0,0);
+  ctx.imageSmoothingEnabled=true;
+  if('imageSmoothingQuality' in ctx)ctx.imageSmoothingQuality='high';
+}
+function resizeCanvases(){
+  setupHiDPICanvas(PC,pctx,1920,1080);
+  setupHiDPICanvas(ic,ictx,CW,CH);
+  setupHiDPICanvas(CLK,kctx,220,220);
+  setupHiDPICanvas(clockFace,faceCtx,220,220);
+  drawClockFace();
+}
+function fitScreen(){
+  const s=Math.min(innerWidth/1920,innerHeight/1080);
+  fitScale=s;
+  document.getElementById('screen').style.transform=`translate(-50%,-50%) scale(${s})`;
+  resizeCanvases();
+}
+addEventListener('resize',fitScreen);
 
 // -- MAIN LOOP --
 let loopLast=performance.now(),renderLast=0;
@@ -408,6 +513,7 @@ function loop(ts){
   updateAnim(ts);updateParticles(dt);drawClock();
   requestAnimationFrame(loop);
 }
+fitScreen();
 updateDigital();setInterval(updateDigital,1000);requestAnimationFrame(loop);
 </script>
 </body>
