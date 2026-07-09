@@ -7,19 +7,21 @@
 <style>
   /* Keep the kiosk self-contained; surf will use local sans-serif fonts. */
   *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; height:100%; overflow:hidden; background:radial-gradient(ellipse at center, #0d0d0d 0%, #060606 65%, #030303 100%); cursor:none; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#080808; cursor:none; }
   /* The stage is authored at a fixed 1920x1080 so every animation coordinate
      stays exact; #screen scales that canvas to fit whatever viewport it loads
      in (letterboxed). The transform also makes the fixed children below anchor
      to this box instead of the raw viewport. Canvas backing-store resolution is
-     scaled independently (see setupHiDPICanvas) so it stays crisp up to native
-     4K, regardless of this CSS scale factor. */
+     scaled independently (see setupHiDPICanvas), but capped conservatively —
+     this runs inside the ScreenBeam 1100P's embedded WebView (~8W SoC, no real
+     canvas GPU acceleration), so the receiver's own weak processor is the
+     bottleneck regardless of the connected display's resolution. */
   #screen { position:fixed; top:50%; left:50%; width:1920px; height:1080px; transform-origin:center center; transform:translate(-50%,-50%); }
   #particles-canvas { position:fixed; top:0; left:0; width:1920px; height:1080px; pointer-events:none; z-index:0; }
   #stage { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); display:flex; align-items:center; justify-content:center; gap:100px; z-index:10; opacity:1; transition:opacity 0.45s ease; }
   .logo-block { width:240px; display:flex; flex-direction:column; align-items:center; gap:22px; }
   #icon-wrap { width:158px; height:158px; position:relative; display:flex; align-items:center; justify-content:center; }
-  #logo-svg { position:absolute; top:0; left:0; width:158px; height:158px; filter:drop-shadow(0 0 22px rgba(255,198,0,0.22)); }
+  #logo-svg { position:absolute; top:0; left:0; width:158px; height:158px; }
   #icon-canvas { position:absolute; top:0; left:0; width:158px; height:158px; opacity:0; }
   #brand-strip { width:228px; height:58px; position:relative; display:flex; align-items:center; justify-content:center; }
   #brand-wordmark { position:absolute; width:228px; height:58px; opacity:0.96; transition:opacity 0.35s; }
@@ -125,9 +127,9 @@ function eout(t){return 1-(1-t)*(1-t);}
 function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
 
 const params=new URLSearchParams(location.search);
-const TARGET_FPS=clamp(Number(params.get('fps'))||60,15,60);
+const TARGET_FPS=clamp(Number(params.get('fps'))||30,15,60);
 const FRAME_MS=1000/TARGET_FPS;
-const PARTICLE_COUNT=clamp(Number(params.get('particles'))||150,0,260);
+const PARTICLE_COUNT=clamp(Number(params.get('particles'))||60,0,260);
 
 if(!CanvasRenderingContext2D.prototype.roundRect){
   CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){
@@ -466,21 +468,24 @@ function updateParticles(dt){
     if(p.life==='in'){p.opacity+=p.fadeIn*dt*60*0.016;if(p.opacity>=p.maxOp){p.opacity=p.maxOp;p.life='full';}}
     else if(p.life==='full'){p.fullCount+=dt*60*0.016;if(p.fullCount>=p.fullTime)p.life='out';}
     else{p.opacity-=p.fadeOut*dt*60*0.016;if(p.opacity<=0||p.y<-10){particles[i]=spawnP(false);continue;}}
-    pctx.shadowColor=`rgba(255,198,0,${(p.opacity*0.8).toFixed(3)})`;
-    pctx.shadowBlur=p.size*2.4;
+    // No shadowBlur here on purpose: it's a software blur pass per particle,
+    // one of the costliest Canvas2D ops, and this runs on the ScreenBeam
+    // receiver's embedded WebView with no real canvas GPU acceleration.
     pctx.beginPath();pctx.arc(p.x,p.y,p.size,0,Math.PI*2);
     pctx.fillStyle=`rgba(255,198,0,${p.opacity.toFixed(3)})`;pctx.fill();
   }
-  pctx.shadowBlur=0;
 }
 
-// -- HiDPI / 4K+ SUPERSAMPLING --
-// Canvases render at devicePixelRatio x the fit-to-viewport scale (capped at 4x)
-// so playback stays crisp when scaled up to large displays (e.g. a 98" 4K TV),
-// instead of stretching a fixed low-res raster.
+// -- HiDPI SUPERSAMPLING --
+// Canvases render at devicePixelRatio x the fit-to-viewport scale so playback
+// stays sharp instead of stretching a fixed low-res raster. Capped at 2x, not
+// higher: this runs on the ScreenBeam 1100P's own embedded processor, which is
+// the actual rendering bottleneck regardless of the connected TV's resolution
+// (8.4W typical / 36W peak power budget, no GPU-accelerated canvas backend) —
+// pushing more supersampled pixels than that chip can push doesn't help.
 let fitScale=1;
 const dpr=Math.max(1,window.devicePixelRatio||1);
-function backingScale(){return clamp(fitScale*dpr,1,4);}
+function backingScale(){return clamp(fitScale*dpr,1,2);}
 function setupHiDPICanvas(canvas,ctx,logicalW,logicalH){
   const bs=backingScale();
   const w=Math.max(1,Math.round(logicalW*bs)),h=Math.max(1,Math.round(logicalH*bs));
