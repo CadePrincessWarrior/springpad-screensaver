@@ -415,20 +415,8 @@ function drawClockFace(){
   }
 }
 
-// -- CENTRAL TIME (America/Chicago) --
-// Kiosk may be viewed via cast from devices set to other timezones; always show Central.
-let centralOffsetMs=0;
-function refreshCentralOffset(){
-  const now=new Date();
-  const central=new Date(now.toLocaleString('en-US',{timeZone:'America/Chicago'}));
-  centralOffsetMs=central.getTime()-now.getTime();
-}
-refreshCentralOffset();
-setInterval(refreshCentralOffset,30000);
-function getCentralNow(){return new Date(Date.now()+centralOffsetMs);}
-
 function drawClock(){
-  const cn=getCentralNow();
+  const cn=new Date();
   const sec=cn.getSeconds()+cn.getMilliseconds()/1000,min=cn.getMinutes()+sec/60,hr=(cn.getHours()%12)+min/60;
   kctx.clearRect(0,0,220,220);
   kctx.drawImage(clockFace,0,0,220,220);
@@ -451,7 +439,7 @@ function drawClock(){
 const DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 function updateDigital(){
-  const cn=getCentralNow();let h=cn.getHours();const m=cn.getMinutes();
+  const cn=new Date();let h=cn.getHours();const m=cn.getMinutes();
   const ap=h>=12?'PM':'AM';h=h%12||12;
   document.getElementById('digital-time').innerHTML=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}<span class="ampm">${ap}</span>`;
   document.getElementById('date-str').textContent=`${DAYS[cn.getDay()]} · ${MONTHS[cn.getMonth()]} ${cn.getDate()}`;
