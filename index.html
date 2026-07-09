@@ -129,7 +129,7 @@ function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
 const params=new URLSearchParams(location.search);
 const TARGET_FPS=clamp(Number(params.get('fps'))||30,15,60);
 const FRAME_MS=1000/TARGET_FPS;
-const PARTICLE_COUNT=clamp(Number(params.get('particles'))||60,0,260);
+const PARTICLE_COUNT=clamp(Number(params.get('particles'))||25,0,150);
 
 if(!CanvasRenderingContext2D.prototype.roundRect){
   CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){
