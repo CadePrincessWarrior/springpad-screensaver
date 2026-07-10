@@ -94,24 +94,29 @@
   </div>
 </div>
 <div id="cast-overlay">
-  <div class="cast-card" data-card="win">
+  <div class="cast-card" data-chapter="clickshare" data-card="clickshare">
     <div class="cast-eyebrow">Cast to this screen</div>
-    <div class="cast-title">Windows</div>
-    <div class="cast-keys"><span class="key">Win</span><span class="key-plus">+</span><span class="key">K</span></div>
-    <div class="cast-body">Select <strong>Idea Lab</strong> from the list</div>
-    <div class="cast-note">Need room audio or mic? Install <strong>ScreenBeam Conference</strong> first.</div>
+    <div class="cast-title">Windows &middot; Mac &middot; Chromebook</div>
+    <div class="cast-body">Plug in the <strong>ClickShare</strong> button and go</div>
+    <div class="cast-note">No button on hand? Download the <strong>ClickShare app</strong>, then enter the code on the screen. Video and room audio both travel through ClickShare.</div>
   </div>
-  <div class="cast-card" data-card="apple">
+  <div class="cast-card" data-chapter="cast" data-card="apple">
     <div class="cast-eyebrow">Cast to this screen</div>
     <div class="cast-title">Mac &middot; iPhone &middot; iPad</div>
     <div class="cast-body">Control Center &rarr; Screen Mirroring &rarr; <strong>Idea Lab</strong></div>
     <div class="cast-note">AirPlay &middot; same Wi-Fi network as this room</div>
   </div>
-  <div class="cast-card" data-card="android">
+  <div class="cast-card" data-chapter="cast" data-card="chromecast">
+    <div class="cast-eyebrow">Cast to this screen</div>
+    <div class="cast-title">Chromecast</div>
+    <div class="cast-body">Cast icon in Chrome &rarr; select <strong>Idea Lab</strong></div>
+    <div class="cast-note">Chrome browser, ChromeOS, or the Google Home app &middot; same Wi-Fi network as this room</div>
+  </div>
+  <div class="cast-card" data-chapter="cast" data-card="android">
     <div class="cast-eyebrow">Cast to this screen</div>
     <div class="cast-title">Android</div>
     <div class="cast-body">Quick Settings &rarr; Cast &rarr; <strong>Idea Lab</strong></div>
-    <div class="cast-note">Miracast &middot; look for &ldquo;Idea Lab&rdquo; in your device list</div>
+    <div class="cast-note">Look for &ldquo;Idea Lab&rdquo; in your device list</div>
   </div>
 </div>
 </div>
@@ -336,12 +341,17 @@ const scenes=[
   }
 ];
 
-// -- CAST-TO-SCREEN CHAPTER --
+// -- CAST-TO-SCREEN CHAPTERS --
+// Alternates each loop: ClickShare instructions, then the wireless-cast
+// instructions (AirPlay/Chromecast/Android), repeating.
 const stageEl=document.getElementById('stage');
 const castOverlay=document.getElementById('cast-overlay');
-const castCardEls=Array.from(document.querySelectorAll('.cast-card'));
+const ALL_CAST_CARDS=Array.from(document.querySelectorAll('.cast-card'));
+const CLICKSHARE_CARDS=ALL_CAST_CARDS.filter(el=>el.dataset.chapter==='clickshare');
+const CAST_CARDS=ALL_CAST_CARDS.filter(el=>el.dataset.chapter==='cast');
 const CAST_DUR=8.5;
-function showCastCard(i){castCardEls.forEach((el,idx)=>el.classList.toggle('active',idx===i));}
+let activeCards=CLICKSHARE_CARDS,chapterToggle=0;
+function showCastCard(i){ALL_CAST_CARDS.forEach(el=>el.classList.remove('active'));if(i>=0&&activeCards[i])activeCards[i].classList.add('active');}
 
 let phase='idle',phaseTimer=0,sceneIdx=0,sceneTimer=0,lastTs=null,castIdx=0,castTimer=0;
 
@@ -370,7 +380,7 @@ function updateAnim(ts){
     castTimer+=dt;
     if(castTimer>=CAST_DUR){
       castIdx++;castTimer=0;
-      if(castIdx>=castCardEls.length){
+      if(castIdx>=activeCards.length){
         castOverlay.classList.remove('visible');showCastCard(-1);
         phase='stageshow';phaseTimer=0;
       } else {
@@ -397,7 +407,11 @@ function updateAnim(ts){
   scene.render(sceneTimer);
   if(sceneTimer>=scene.dur){
     sceneIdx++;sceneTimer=0;setLabel('',0);
-    if(sceneIdx>=scenes.length){phase='stagehide';phaseTimer=0;ictx.clearRect(0,0,CW,CH);}
+    if(sceneIdx>=scenes.length){
+      activeCards=chapterToggle===0?CLICKSHARE_CARDS:CAST_CARDS;
+      chapterToggle=1-chapterToggle;
+      phase='stagehide';phaseTimer=0;ictx.clearRect(0,0,CW,CH);
+    }
   }
 }
 
