@@ -53,6 +53,19 @@
   .room-bi::before { content:''; flex-shrink:0; width:8px; height:8px; margin-top:8px; border-radius:2px; background:#FFC600; transform:rotate(45deg); }
   .room-bi strong { color:rgba(255,255,255,0.92); font-weight:600; }
   .room-note { font-family:'DM Sans',sans-serif; font-weight:300; font-size:16px; line-height:1.5; color:rgba(255,255,255,0.34); margin-top:2px; }
+
+  /* -- COUNTDOWN SLOT (parent posts ~5 min out; replaces the clock in place) -- */
+  .cd-slot { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .cd-eyebrow { font-family:'DM Sans',sans-serif; font-weight:400; font-size:14px; letter-spacing:0.34em; text-transform:uppercase; color:rgba(255,198,0,0.82); }
+  .cd-num { font-family:'Nunito',sans-serif; font-weight:700; font-size:96px; line-height:1; color:rgba(255,255,255,0.96); font-variant-numeric:tabular-nums; animation:cd-pulse 2.6s ease-in-out infinite; }
+  .cd-sub { font-family:'DM Sans',sans-serif; font-weight:300; font-size:14px; letter-spacing:0.26em; text-transform:uppercase; color:rgba(255,255,255,0.4); }
+  .cd-name { font-family:'Nunito',sans-serif; font-weight:600; font-size:26px; color:rgba(255,255,255,0.9); margin-top:6px; }
+  @keyframes cd-pulse { 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.03); } }
+
+  /* -- DIM: fade the foreground text/animations, keep the particles, so the
+        parent can lay the schedule over the same particle field (no hard cut) -- */
+  #col-divider, #room-panel { transition:opacity 0.55s ease; }
+  #screen.dimmed #stage, #screen.dimmed #room-panel, #screen.dimmed #col-divider { opacity:0; }
 </style>
 </head>
 <body>
@@ -98,6 +111,14 @@
     <canvas id="clock-canvas" width="220" height="220"></canvas>
     <div class="time-digital" id="digital-time">12:00<span class="ampm">AM</span></div>
     <div class="date-line" id="date-str">Monday &middot; January 1</div>
+    <!-- Countdown slot: the parent kiosk posts a message ~5 min before a meeting
+         and this replaces the clock in place. The rest of the screen is unchanged. -->
+    <div class="cd-slot" id="cd-slot" style="display:none;">
+      <div class="cd-eyebrow" id="cd-eyebrow">Starting soon</div>
+      <div class="cd-num" id="cd-num">5:00</div>
+      <div class="cd-sub" id="cd-sub">until start</div>
+      <div class="cd-name" id="cd-name">&nbsp;</div>
+    </div>
   </div>
 </div>
 <div id="col-divider"></div>
@@ -504,6 +525,32 @@ function loop(ts){
 }
 fitScreen();
 updateDigital();setInterval(updateDigital,1000);requestAnimationFrame(loop);
+
+// -- KIOSK CONTROL --------------------------------------------------------
+// The parent room-kiosk page posts messages to swap the clock for a countdown
+// (~5 min before a meeting) or to dim the foreground so it can lay the meeting
+// schedule over the particles. Everything else keeps animating underneath.
+(function(){
+  const screenEl=document.getElementById('screen');
+  const clk=document.getElementById('clock-canvas');
+  const dig=document.getElementById('digital-time');
+  const dat=document.getElementById('date-str');
+  const slot=document.getElementById('cd-slot');
+  function showClock(){ slot.style.display='none'; clk.style.display=''; dig.style.display=''; dat.style.display=''; }
+  function showCountdown(d){
+    clk.style.display='none'; dig.style.display='none'; dat.style.display='none'; slot.style.display='flex';
+    document.getElementById('cd-eyebrow').textContent=d.eyebrow||'Starting soon';
+    document.getElementById('cd-num').textContent=d.count||'';
+    document.getElementById('cd-sub').textContent=d.sub||'';
+    document.getElementById('cd-name').textContent=d.name||' ';
+  }
+  window.addEventListener('message',function(e){
+    const d=e.data; if(!d||d.type!=='kiosk')return;
+    if(d.view==='countdown'){ screenEl.classList.remove('dimmed'); showCountdown(d); }
+    else if(d.view==='schedule'){ screenEl.classList.add('dimmed'); }
+    else { screenEl.classList.remove('dimmed'); showClock(); }   // idle
+  });
+})();
 </script>
 </body>
 </html>
